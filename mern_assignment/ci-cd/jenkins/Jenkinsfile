@@ -1,0 +1,136 @@
+pipeline {
+    agent any
+    
+    environment {
+        DOCKER_REGISTRY = 'your-registry.com'
+        DOCKER_REPO = 'mern-assessment'
+        AWS_REGION = 'us-east-1'
+        STAGING_CLUSTER = 'mern-staging-cluster'
+        PROD_CLUSTER = 'mern-production-cluster'
+    }
+    
+    stages {
+        stage('🔍 Checkout') {
+            steps {
+                checkout scm
+            }
+        }
+        
+        stage('🏗️ Build & Test') {
+            parallel {
+                stage('Auth Service') {
+                    steps {
+                        dir('backend/auth-service') {
+                            sh 'npm ci'
+                            sh 'npm test'
+                            sh 'docker build -t ${DOCKER_REPO}-auth:${BUILD_NUMBER} .'
+                        }
+                    }
+                }
+                stage('Course Service') {
+                    steps {
+                        dir('backend/course-management') {
+                            sh 'npm ci'
+                            sh 'npm test'
+                            sh 'docker build -t ${DOCKER_REPO}-courses:${BUILD_NUMBER} .'
+                        }
+                    }
+                }
+                stage('AI Service') {
+                    steps {
+                        dir('backend/ai-recommendation') {
+                            sh 'npm ci'
+                            sh 'npm test'
+                            sh 'docker build -t ${DOCKER_REPO}-ai:${BUILD_NUMBER} .'
+                        }
+                    }
+                }
+                stage('Frontend') {
+                    steps {
+                        dir('frontend') {
+                            sh 'npm ci'
+                            sh 'npm test'
+                            sh 'npm run build'
+                        }
+                    }
+                }
+            }
+        }
+        
+        stage('🔒 Security Scan') {
+            steps {
+                sh 'docker run --rm -v $(pwd):/tmp/app securecodewarrior/docker-security-scan /tmp/app'
+            }
+        }
+        
+        stage('🚀 Deploy to Staging') {
+            when {
+                branch 'main'
+            }
+            steps {
+                script {
+                    sh '''
+                        aws ecs update-service \
+                            --cluster ${STAGING_CLUSTER} \
+                            --service auth-service \
+                            --force-new-deployment
+                    '''
+                }
+            }
+        }
+        
+        stage('🧪 Integration Tests') {
+            steps {
+                sh 'docker-compose -f docker-compose.test.yml up -d'
+                sh 'sleep 30'
+                sh 'newman run tests/integration/api-tests.postman_collection.json'
+                sh 'docker-compose -f docker-compose.test.yml down'
+            }
+        }
+        
+        stage('🚀 Deploy to Production') {
+            when {
+                branch 'main'
+            }
+            input {
+                message "Deploy to production?"
+                ok "Deploy"
+                parameters {
+                    choice(
+                        name: 'ENVIRONMENT',
+                        choices: ['production'],
+                        description: 'Target environment'
+                    )
+                }
+            }
+            steps {
+                script {
+                    sh '''
+                        aws ecs update-service \
+                            --cluster ${PROD_CLUSTER} \
+                            --service auth-service-prod \
+                            --force-new-deployment
+                    '''
+                }
+            }
+        }
+    }
+    
+    post {
+        always {
+            cleanWs()
+        }
+        success {
+            slackSend(
+                color: 'good',
+                message: "✅ Pipeline succeeded: ${env.JOB_NAME} - ${env.BUILD_NUMBER}"
+            )
+        }
+        failure {
+            slackSend(
+                color: 'danger',
+                message: "❌ Pipeline failed: ${env.JOB_NAME} - ${env.BUILD_NUMBER}"
+            )
+        }
+    }
+}

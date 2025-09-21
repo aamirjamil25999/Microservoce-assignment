@@ -1,7 +1,6 @@
-import type {NextConfig} from 'next';
+import type { NextConfig } from 'next';
 
 const nextConfig: NextConfig = {
-  /* config options here */
   typescript: {
     ignoreBuildErrors: true,
   },
@@ -18,6 +17,16 @@ const nextConfig: NextConfig = {
       },
     ],
   },
+
+  // ⬇️ Add this: proxy backend to avoid CORS/preflight issues
+  async rewrites() {
+    return [
+      { source: '/api/auth/:path*',            destination: 'http://localhost:4000/auth/:path*' },
+      { source: '/api/courses/:path*',         destination: 'http://localhost:4002/courses/:path*' },
+      { source: '/api/recommendations/:path*', destination: 'http://localhost:4001/recommendations/:path*' },
+    ];
+  },
 };
 
 export default nextConfig;
+
