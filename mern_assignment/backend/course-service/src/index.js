@@ -6,7 +6,8 @@ import cors from 'cors'
 import coursesRoutes from './routes/courses.js'
 dotenv.config()
 const app = express()
-app.use(cors())
+// backend
+app.use(cors({ origin: '*' })); 
 app.use(express.json())
 const { PORT = 4002, MONGO_URI } = process.env
 if(!MONGO_URI){

@@ -1,4 +1,0 @@
-course_id,title,description,category,instructor,duration
-1,React Basics,Learn components and state,web,Jane Doe,5h
-2,Node Microservices,Service patterns and JWT,backend,John Smith,6h
-3,Elasticsearch 101,Search fundamentals,search,Ada Lovelace,4h
